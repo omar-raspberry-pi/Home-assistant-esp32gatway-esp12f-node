@@ -1,0 +1,1 @@
+# Home-assistant-esp32gatway-esp12f-node
