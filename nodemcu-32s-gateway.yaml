@@ -1,0 +1,112 @@
+esphome:
+  name: nodemcu-32s-gateway
+  friendly_name: nodemcu-32s-gateway
+
+esp32:
+  variant: esp32
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: "ZoDxpD596QnyHPSH5mKOUYVaHeboF27px7niAi9grFA="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # مهم: لا نحدد channel هنا.
+  # ESPHome سيستخدم قناة Wi-Fi الحالية للـ ESP-NOW.
+
+  ap:
+    ssid: "ESPNow-Gateway"
+    password: "12345678"
+
+espnow:
+  # أثناء التطوير نسمح باكتشاف الـ Nodes تلقائياً
+  auto_add_peer: true
+
+  on_unknown_peer:
+    then:
+      - lambda: |-
+          ESP_LOGI(
+            "espnow",
+            "UNKNOWN PEER %02X:%02X:%02X:%02X:%02X:%02X",
+            info.src_addr[0],
+            info.src_addr[1],
+            info.src_addr[2],
+            info.src_addr[3],
+            info.src_addr[4],
+            info.src_addr[5]
+          );
+
+          ESP_LOGI(
+            "espnow",
+            "Received %u bytes",
+            size
+          );
+
+  on_receive:
+    then:
+      - lambda: |-
+          char src_mac[20];
+
+          snprintf(
+            src_mac,
+            sizeof(src_mac),
+            "%02X:%02X:%02X:%02X:%02X:%02X",
+            info.src_addr[0],
+            info.src_addr[1],
+            info.src_addr[2],
+            info.src_addr[3],
+            info.src_addr[4],
+            info.src_addr[5]
+          );
+
+          ESP_LOGI(
+            "espnow",
+            "RX from %s, size=%u, RSSI=%d",
+            src_mac,
+            size,
+            info.rx_ctrl->rssi
+          );
+
+          ESP_LOGI(
+            "espnow",
+            "DATA: %s",
+            format_hex_pretty(data, size).c_str()
+          );
+
+# --------------------------------------------------
+# اختبار Node 1
+# غيّر MAC بعد أن نقرأ MAC الخاص بالـ D1 mini
+# --------------------------------------------------
+
+switch:
+  - platform: template
+    name: "Node 1 Relay"
+    id: node1_relay
+    optimistic: true
+
+    turn_on_action:
+      - espnow.send:
+          address: C8:2B:96:22:9E:38
+          data: [0xA5, 0x01, 0x01]
+
+    turn_off_action:
+      - espnow.send:
+          address: C8:2B:96:22:9E:38
+          data: [0xA5, 0x01, 0x00]
+
+# Gateway MAC
+text_sensor:
+  - platform: wifi_info
+    mac_address:
+      name: "Gateway MAC"
